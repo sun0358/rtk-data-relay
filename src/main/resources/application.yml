@@ -1,0 +1,70 @@
+# RTK数据转发服务配置
+server:
+  port: 8899
+  
+# RTK服务配置
+rtk:
+  # Server1配置（接收基站数据）
+  server1:
+    port: 9003
+    # 连接超时时间（秒）
+    timeout: 30
+    # 心跳检测间隔（秒）
+    heartbeat-interval: 10
+    
+  # Server2配置（转发数据给移动站）
+  server2:
+    port: 9002
+    # 最大移动站连接数
+    max-connections: 10
+    # 连接超时时间（秒）
+    timeout: 30
+    # 心跳检测间隔（秒）
+    heartbeat-interval: 10
+    
+  # 数据转发配置
+  relay:
+    # 数据缓冲区大小（字节）
+    buffer-size: 8192
+    # 统计数据保留时间（小时）
+    statistics-retention-hours: 24
+    # 自动重连间隔（秒）
+    reconnect-interval: 5
+    # 最大重连次数
+    max-reconnect-attempts: 10
+
+# Spring Boot配置
+spring:
+  application:
+    name: rtk-data-relay
+  profiles:
+    active: prod
+    
+# 日志配置
+logging:
+  level:
+    com.rtk: INFO
+    io.netty: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/rtk-relay.log
+    max-size: 100MB
+    max-history: 30
+
+# 监控配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+  security:
+    enabled: false

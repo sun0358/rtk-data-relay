@@ -1,0 +1,282 @@
+#!/bin/bash
+# =====================================================
+# build-and-deploy.sh - 改进版
+# 支持动态JAR文件命名的构建部署脚本
+# =====================================================
+
+set -e
+
+# 颜色定义
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# 配置变量 - 请修改为您的实际服务器信息
+UBUNTU_SERVER="YOUR_SERVER_IP"
+UBUNTU_USER="YOUR_USERNAME"
+UBUNTU_SSH_KEY=""
+
+# 全局变量
+JAR_FILE=""
+JAR_NAME=""
+
+# 日志函数
+log_info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+log_step() {
+    echo -e "${BLUE}[STEP]${NC} $1"
+}
+
+# 检查配置
+check_config() {
+    if [[ "$UBUNTU_SERVER" == "YOUR_SERVER_IP" ]]; then
+        log_error "请在脚本中配置UBUNTU_SERVER变量"
+        exit 1
+    fi
+
+    if [[ "$UBUNTU_USER" == "YOUR_USERNAME" ]]; then
+        log_error "请在脚本中配置UBUNTU_USER变量"
+        exit 1
+    fi
+
+    log_info "配置检查通过"
+}
+
+# 构建项目
+build_project() {
+    log_step "开始构建项目..."
+
+    if [[ ! -f "pom.xml" ]]; then
+        log_error "未找到pom.xml文件，请在项目根目录运行此脚本"
+        exit 1
+    fi
+
+    # 清理并构建项目
+    log_info "执行Maven构建..."
+    mvn clean package -DskipTests
+
+    # 查找生成的JAR文件（支持时间戳命名）
+    JAR_FILE=$(find target -name "rtk-data-relay-*.jar" -type f | head -1)
+
+    if [[ -z "$JAR_FILE" ]]; then
+        log_error "构建失败，未找到jar文件"
+        exit 1
+    fi
+
+    # 获取JAR文件名（不含路径）
+    JAR_NAME=$(basename "$JAR_FILE")
+
+    log_info "项目构建成功: $JAR_FILE"
+    log_info "JAR文件名: $JAR_NAME"
+}
+
+# 准备部署文件
+prepare_deploy_files() {
+    log_step "准备部署文件..."
+
+    # 创建临时部署目录
+    DEPLOY_DIR="deploy-temp"
+    rm -rf "$DEPLOY_DIR"
+    mkdir -p "$DEPLOY_DIR"
+
+    # 复制jar文件
+    cp "$JAR_FILE" "$DEPLOY_DIR/"
+
+    # 复制配置文件
+    cp src/main/resources/application.yml "$DEPLOY_DIR/"
+
+    # 生成动态的service文件
+    cat > "$DEPLOY_DIR/rtk-data-relay.service" << EOF
+[Unit]
+Description=RTK Data Relay Service
+Documentation=RTK差分定位数据转发服务
+After=network.target
+
+[Service]
+Type=simple
+User=rtk
+Group=rtk
+WorkingDirectory=/opt/rtk-data-relay
+ExecStart=/usr/bin/java -jar -Xms512m -Xmx1024m -server ${JAR_NAME}
+ExecStop=/bin/kill -TERM \$MAINPID
+ExecReload=/bin/kill -HUP \$MAINPID
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rtk-data-relay
+
+# 环境变量
+Environment=JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+Environment=SPRING_PROFILES_ACTIVE=prod
+
+# 安全配置
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/rtk-data-relay/logs
+
+# 资源限制
+LimitNOFILE=65536
+LimitNPROC=32768
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # 复制安装脚本
+    cp deploy/install.sh "$DEPLOY_DIR/"
+    
+    # 设置执行权限
+    chmod +x "$DEPLOY_DIR/install.sh"
+
+    log_info "部署文件准备完成"
+    log_info "将使用JAR文件: $JAR_NAME"
+}
+
+# 上传文件到Ubuntu服务器
+upload_files() {
+    log_step "上传文件到Ubuntu服务器..."
+
+    SSH_CMD="ssh"
+    SCP_CMD="scp"
+    if [[ -n "$UBUNTU_SSH_KEY" ]]; then
+        SSH_CMD="ssh -i $UBUNTU_SSH_KEY"
+        SCP_CMD="scp -i $UBUNTU_SSH_KEY"
+    fi
+
+    # 创建远程目录
+    $SSH_CMD "$UBUNTU_USER@$UBUNTU_SERVER" "mkdir -p ~/rtk-deploy"
+
+    # 上传部署文件
+    $SCP_CMD -r deploy-temp/* "$UBUNTU_USER@$UBUNTU_SERVER:~/rtk-deploy/"
+
+    log_info "文件上传完成"
+}
+
+# 在Ubuntu服务器上安装服务
+install_on_ubuntu() {
+    log_step "在Ubuntu服务器上安装服务..."
+
+    SSH_CMD="ssh"
+    if [[ -n "$UBUNTU_SSH_KEY" ]]; then
+        SSH_CMD="ssh -i $UBUNTU_SSH_KEY"
+    fi
+
+    # 在远程服务器上执行安装，传递JAR文件名
+    $SSH_CMD "$UBUNTU_USER@$UBUNTU_SERVER" << EOF
+        cd ~/rtk-deploy
+        sudo ./install.sh "$JAR_NAME"
+EOF
+
+    log_info "服务安装完成"
+}
+
+# 验证部署
+verify_deployment() {
+    log_step "验证部署..."
+
+    SSH_CMD="ssh"
+    if [[ -n "$UBUNTU_SSH_KEY" ]]; then
+        SSH_CMD="ssh -i $UBUNTU_SSH_KEY"
+    fi
+
+    # 检查服务状态
+    log_info "检查服务状态..."
+    $SSH_CMD "$UBUNTU_USER@$UBUNTU_SERVER" "sudo systemctl status rtk-data-relay --no-pager"
+
+    # 检查端口监听
+    log_info "检查端口监听状态..."
+    $SSH_CMD "$UBUNTU_USER@$UBUNTU_SERVER" "sudo ss -tlnp | grep -E ':(8899|9003|9002)'"
+
+    # 测试API接口
+    log_info "测试API接口..."
+    sleep 5
+
+    if $SSH_CMD "$UBUNTU_USER@$UBUNTU_SERVER" "curl -s http://localhost:8899/api/monitor/health" > /dev/null; then
+        log_info "API接口响应正常"
+    else
+        log_warn "API接口响应异常，请检查服务日志"
+    fi
+}
+
+# 清理临时文件
+cleanup() {
+    log_step "清理临时文件..."
+    rm -rf deploy-temp
+    log_info "清理完成"
+}
+
+# 显示部署信息
+show_deployment_info() {
+    echo ""
+    echo "=== RTK数据转发服务部署完成 ==="
+    echo ""
+    echo "部署的JAR文件: ${GREEN}$JAR_NAME${NC}"
+    echo ""
+    echo "服务器信息："
+    echo "  地址: $UBUNTU_SERVER"
+    echo "  用户: $UBUNTU_USER"
+    echo ""
+    echo "服务端口："
+    echo "  Web API: 8899"
+    echo "  基站接入: 9003"
+    echo "  移动站接入: 9002"
+    echo ""
+    echo "快速访问："
+    echo "  curl http://$UBUNTU_SERVER:8899/api/monitor/ping"
+    echo "  curl http://$UBUNTU_SERVER:8899/api/monitor/status"
+    echo ""
+}
+
+# 主函数
+main() {
+    log_info "开始RTK数据转发服务构建和部署..."
+
+    # 参数处理
+    if [[ $# -eq 2 ]]; then
+        UBUNTU_SERVER="$1"
+        UBUNTU_USER="$2"
+    elif [[ $# -eq 3 ]]; then
+        UBUNTU_SERVER="$1"
+        UBUNTU_USER="$2"
+        UBUNTU_SSH_KEY="$3"
+    elif [[ "$UBUNTU_SERVER" == "YOUR_SERVER_IP" || "$UBUNTU_USER" == "YOUR_USERNAME" ]]; then
+        echo "用法:"
+        echo "  $0 <Ubuntu服务器IP> <用户名> [SSH私钥路径]"
+        echo ""
+        echo "示例:"
+        echo "  $0 192.168.1.100 ubuntu"
+        echo "  $0 192.168.1.100 ubuntu ~/.ssh/id_rsa"
+        echo ""
+        echo "或者直接修改脚本中的UBUNTU_SERVER和UBUNTU_USER变量"
+        exit 1
+    fi
+
+    check_config
+    build_project
+    prepare_deploy_files
+    upload_files
+    install_on_ubuntu
+    verify_deployment
+    cleanup
+    show_deployment_info
+
+    log_info "部署完成！JAR文件: ${GREEN}$JAR_NAME${NC}"
+}
+
+# 执行主函数
+main "$@"

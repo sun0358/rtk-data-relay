@@ -1,0 +1,129 @@
+# =====================================================
+# RTK数据转发服务 - Git忽略文件配置
+# =====================================================
+
+# Maven构建文件
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# IDE相关文件
+.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/
+.settings/
+.project
+.classpath
+
+# 系统文件
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# 日志文件
+logs/
+*.log
+*.log.*
+*.out
+
+# 临时文件
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# 包文件
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# 运行时文件
+pid
+*.pid
+*.seed
+*.pid.lock
+
+# 依赖目录
+node_modules/
+.pnp
+.pnp.js
+
+# 测试覆盖率报告
+coverage/
+*.lcov
+
+# 环境变量文件
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# =====================================================
+# 敏感信息和部署相关文件（不上传到代码仓库）
+# =====================================================
+
+# 包含实际服务器IP和用户名的部署脚本
+deploy/build-and-deploy.sh
+
+# 临时部署目录
+deploy-temp/
+
+# 备份文件
+*.bak
+*.backup
+
+# 私钥文件
+*.pem
+*.key
+id_rsa*
+*.ssh
+
+# 配置文件中可能包含敏感信息的备份
+application-prod.yml
+application-local.yml
+*.properties.local
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+
+# =====================================================
+# 开发和测试相关
+# =====================================================
+
+# JUnit测试报告
+TEST-*.xml
+
+# Surefire测试报告
+surefire-reports/
+
+# 性能测试文件
+*.jmx
+*.jtl
+
+# 调试文件
+hs_err_pid*
+replay_pid*
+
+# =====================================================
+# 文档相关（可选）
+# =====================================================
+
+# 如果不想上传某些文档，可以取消下面的注释
+# docs/private/
+# *.docx
+# *.pdf

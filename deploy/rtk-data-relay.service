@@ -1,0 +1,36 @@
+[Unit]
+Description=RTK Data Relay Service
+Documentation=RTK差分定位数据转发服务
+After=network.target
+
+[Service]
+Type=simple
+User=rtk
+Group=rtk
+WorkingDirectory=/opt/rtk-data-relay
+ExecStart=/usr/bin/java -jar -Xms512m -Xmx1024m -server rtk-data-relay-1.0.0.jar
+ExecStop=/bin/kill -TERM $MAINPID
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rtk-data-relay
+
+# 环境变量
+Environment=JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+Environment=SPRING_PROFILES_ACTIVE=prod
+
+# 安全配置
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/rtk-data-relay/logs
+
+# 资源限制
+LimitNOFILE=65536
+LimitNPROC=32768
+
+[Install]
+WantedBy=multi-user.target
