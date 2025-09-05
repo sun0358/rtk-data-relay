@@ -2,6 +2,7 @@ package com.rtk.relay.netty;
 
 import com.rtk.relay.entity.ConnectionInfo;
 import com.rtk.relay.service.ConnectionManager;
+import com.rtk.relay.service.DataRelayService;
 import com.rtk.relay.util.ConnectionIdGenerator;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
@@ -11,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.net.InetSocketAddress;
 import java.time.LocalDateTime;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * 移动站数据处理器
@@ -33,12 +35,19 @@ public class MobileStationHandler extends ChannelInboundHandlerAdapter {
     private final ConnectionManager connectionManager;
     
     /**
+     * 数据转发服务
+     */
+    private final DataRelayService dataRelayService;
+    
+    /**
      * 构造函数
      * 
      * @param connectionManager 连接管理器
+     * @param dataRelayService 数据转发服务
      */
-    public MobileStationHandler(ConnectionManager connectionManager) {
+    public MobileStationHandler(ConnectionManager connectionManager, DataRelayService dataRelayService) {
         this.connectionManager = connectionManager;
+        this.dataRelayService = dataRelayService;
     }
     
     /**
@@ -80,6 +89,19 @@ public class MobileStationHandler extends ChannelInboundHandlerAdapter {
         
         log.info("移动站连接建立成功 - 连接ID: {}, 远程地址: {}:{}", 
                 connectionId, connectionInfo.getRemoteAddress(), connectionInfo.getRemotePort());
+        
+        // 为新连接的移动站发送缓存数据（异步执行，不阻塞连接建立）
+        if (dataRelayService != null) {
+            CompletableFuture.runAsync(() -> {
+                try {
+                    // 稍微延迟，让连接完全建立
+                    Thread.sleep(100);
+                    dataRelayService.sendBufferedDataToNewMobileStation(ctx.channel(), connectionId);
+                } catch (Exception e) {
+                    log.warn("发送缓存数据失败: {}", e.getMessage());
+                }
+            });
+        }
     }
     
     /**

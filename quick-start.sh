@@ -33,7 +33,8 @@ echo -e "${BLUE}📦 正在构建项目...${NC}"
 mvn clean package -DskipTests
 
 # 检查构建结果
-if [[ ! -f "target/rtk-data-relay-1.0.0.jar" ]]; then
+JAR_FILE=$(find target -name "rtk-data-relay-1.0.0-*.jar" -type f | head -1)
+if [[ -z "$JAR_FILE" ]]; then
     echo "❌ 构建失败，未找到jar文件"
     exit 1
 fi
@@ -55,4 +56,4 @@ java -Dspring.main.banner-mode=off \
      -Djava.awt.headless=true \
      -XX:+UseG1GC \
      -XX:MaxGCPauseMillis=200 \
-     -jar target/rtk-data-relay-1.0.0-*.jar
+     -jar "$JAR_FILE"

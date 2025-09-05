@@ -185,6 +185,16 @@ public class ConnectionManager {
     public Collection<ConnectionInfo> getAllConnectionInfo() {
         return connectionInfoMap.values();
     }
+    
+    /**
+     * 获取指定连接的信息
+     *
+     * @param connectionId 连接ID
+     * @return 连接信息，如果不存在则返回null
+     */
+    public ConnectionInfo getConnectionInfo(String connectionId) {
+        return connectionInfoMap.get(connectionId);
+    }
 
     /**
      * 启动连接检查任务
@@ -205,7 +215,7 @@ public class ConnectionManager {
 
     /**
      * 检查并清理无效连接
-     * 【修复】：移动站只检查channel状态，不检查超时
+     * 【修复】：避免重复扣减计数器，只清理Map中的连接，不重复扣减统计计数
      */
     private void checkAndCleanupConnections() {
         log.debug("开始检查连接状态...");
@@ -218,9 +228,10 @@ public class ConnectionManager {
 
             // 只检查channel是否还活跃
             if (!channel.isActive()) {
-                log.warn("清理无效基站连接 - 连接ID: {}", connectionId);
+                log.warn("清理无效基站连接 - 连接ID: {} (channel已断开)", connectionId);
                 connectionInfoMap.remove(connectionId);
-                statistics.getCurrentBaseStationConnections().decrementAndGet();
+                // 【关键修复】不在这里扣减计数器，避免与channelInactive重复扣减
+                // statistics.getCurrentBaseStationConnections().decrementAndGet();
                 try {
                     channel.close();
                 } catch (Exception e) {
@@ -237,6 +248,7 @@ public class ConnectionManager {
                     log.warn("基站连接超时 - 连接ID: {}, 最后活跃: {}",
                             connectionId, connectionInfo.getLastActiveTime());
                     connectionInfoMap.remove(connectionId);
+                    // 【关键修复】超时的情况下才扣减，因为channelInactive可能不会被调用
                     statistics.getCurrentBaseStationConnections().decrementAndGet();
                     try {
                         channel.close();
@@ -257,9 +269,10 @@ public class ConnectionManager {
 
             // 只检查channel是否还活跃，不检查lastActiveTime
             if (!channel.isActive()) {
-                log.warn("清理无效移动站连接 - 连接ID: {}", connectionId);
+                log.warn("清理无效移动站连接 - 连接ID: {} (channel已断开)", connectionId);
                 connectionInfoMap.remove(connectionId);
-                statistics.getCurrentMobileStationConnections().decrementAndGet();
+                // 【关键修复】不在这里扣减计数器，避免与channelInactive重复扣减
+                // statistics.getCurrentMobileStationConnections().decrementAndGet();
                 try {
                     channel.close();
                 } catch (Exception e) {
@@ -273,6 +286,24 @@ public class ConnectionManager {
 
             return false;
         });
+
+        // 【新增】修正计数器，确保与实际Map大小一致
+        int actualBaseStations = baseStationChannels.size();
+        int actualMobileStations = mobileStationChannels.size();
+        long currentBaseStations = statistics.getCurrentBaseStationConnections().get();
+        long currentMobileStations = statistics.getCurrentMobileStationConnections().get();
+        
+        if (actualBaseStations != currentBaseStations) {
+            log.warn("修正基站连接计数器 - 实际: {}, 计数器: {} -> {}", 
+                    actualBaseStations, currentBaseStations, actualBaseStations);
+            statistics.getCurrentBaseStationConnections().set(actualBaseStations);
+        }
+        
+        if (actualMobileStations != currentMobileStations) {
+            log.warn("修正移动站连接计数器 - 实际: {}, 计数器: {} -> {}", 
+                    actualMobileStations, currentMobileStations, actualMobileStations);
+            statistics.getCurrentMobileStationConnections().set(actualMobileStations);
+        }
 
         log.debug("连接检查完成 - 基站: {}, 移动站: {}",
                 baseStationChannels.size(), mobileStationChannels.size());

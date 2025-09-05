@@ -90,21 +90,25 @@ setup_user_and_directories() {
     log_info "目录创建完成"
 }
 
+# 全局变量：JAR文件路径
+JAR_FILE=""
+
 # 复制应用文件
 copy_application_files() {
     log_step "复制应用文件..."
     
     # 检查jar文件是否存在
-    if [[ ! -f "rtk-data-relay-1.0.0.jar" ]]; then
-        log_error "未找到应用jar文件: rtk-data-relay-1.0.0.jar"
+    JAR_FILE=$(find . -name "rtk-data-relay-1.0.0-*.jar" -type f | head -1)
+    if [[ -z "$JAR_FILE" ]]; then
+        log_error "未找到应用jar文件: rtk-data-relay-1.0.0-*.jar"
         log_error "请确保在包含jar文件的目录中运行此脚本"
         exit 1
     fi
     
     # 复制jar文件
-    cp rtk-data-relay-1.0.0.jar /opt/rtk-data-relay/
-    chown rtk:rtk /opt/rtk-data-relay/rtk-data-relay-1.0.0.jar
-    chmod 644 /opt/rtk-data-relay/rtk-data-relay-1.0.0.jar
+    cp "$JAR_FILE" /opt/rtk-data-relay/
+    chown rtk:rtk "/opt/rtk-data-relay/$(basename "$JAR_FILE")"
+    chmod 644 "/opt/rtk-data-relay/$(basename "$JAR_FILE")"
     
     # 复制配置文件（如果存在）
     if [[ -f "application.yml" ]]; then
@@ -127,8 +131,9 @@ install_service() {
         exit 1
     fi
     
-    # 复制服务文件
-    cp rtk-data-relay.service /etc/systemd/system/
+    # 动态生成服务文件，替换JAR文件名
+    JAR_NAME=$(basename "$JAR_FILE")
+    sed "s/rtk-data-relay-1.0.0-\*.jar/$JAR_NAME/g" rtk-data-relay.service > /etc/systemd/system/rtk-data-relay.service
     
     # 重新加载systemd
     systemctl daemon-reload

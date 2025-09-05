@@ -31,7 +31,7 @@ cd ~/company/prj/Java/rtk-data-relay
 mvn clean package -DskipTests
 
 # 5. 验证构建结果
-ls -la target/rtk-data-relay-1.0.0.jar
+ls -la target/rtk-data-relay-1.0.0-*.jar
 ```
 
 ### 第二步：Ubuntu服务器环境准备
@@ -69,7 +69,7 @@ mkdir -p ~/rtk-deploy
 
 ```bash
 # 1. 上传文件到Ubuntu服务器
-scp target/rtk-data-relay-1.0.0.jar ubuntu@192.168.1.100:~/rtk-deploy/
+scp target/rtk-data-relay-1.0.0-*.jar ubuntu@192.168.1.100:~/rtk-deploy/
 scp deploy/rtk-data-relay.service ubuntu@192.168.1.100:~/rtk-deploy/
 scp deploy/install.sh ubuntu@192.168.1.100:~/rtk-deploy/
 scp src/main/resources/application.yml ubuntu@192.168.1.100:~/rtk-deploy/
@@ -93,7 +93,7 @@ sudo systemctl status rtk-data-relay
 sudo netstat -tlnp | grep -E ':(8080|9001|9002)'
 
 # 3. 测试API接口
-curl http://localhost:8080/api/monitor/status
+curl http://localhost:8899/api/v1/system/status
 
 # 4. 查看服务日志
 sudo journalctl -u rtk-data-relay -f
@@ -265,7 +265,7 @@ sudo ss -tln | grep -E ':(9001|9002)'    # 端口连接数
      -XX:MaxGCPauseMillis=100 \
      -XX:+HeapDumpOnOutOfMemoryError \
      -XX:HeapDumpPath=/opt/rtk-data-relay/logs/ \
-     rtk-data-relay-1.0.0.jar
+     rtk-data-relay-1.0.0-*.jar
    ```
 
 2. **系统网络参数优化**
@@ -326,21 +326,21 @@ ssh ubuntu@<服务器IP>
 sudo systemctl stop rtk-data-relay
 
 # 3. 备份当前版本
-sudo cp /opt/rtk-data-relay/rtk-data-relay-1.0.0.jar \
-        /opt/rtk-data-relay/rtk-data-relay-1.0.0.jar.bak.$(date +%Y%m%d_%H%M%S)
+sudo cp /opt/rtk-data-relay/rtk-data-relay-1.0.0-*.jar \
+        /opt/rtk-data-relay/rtk-data-relay-backup-$(date +%Y%m%d_%H%M%S).jar
 
 # 4. 上传新版本
 exit
-scp target/rtk-data-relay-1.0.0.jar ubuntu@<服务器IP>:/tmp/
+scp target/rtk-data-relay-1.0.0-*.jar ubuntu@<服务器IP>:/tmp/
 
 # 5. 替换文件并启动
 ssh ubuntu@<服务器IP>
-sudo cp /tmp/rtk-data-relay-1.0.0.jar /opt/rtk-data-relay/
-sudo chown rtk:rtk /opt/rtk-data-relay/rtk-data-relay-1.0.0.jar
+sudo cp /tmp/rtk-data-relay-1.0.0-*.jar /opt/rtk-data-relay/
+sudo chown rtk:rtk /opt/rtk-data-relay/rtk-data-relay-1.0.0-*.jar
 sudo systemctl start rtk-data-relay
 
 # 6. 验证更新
-curl http://localhost:8080/api/monitor/status
+curl http://localhost:8899/api/v1/system/status
 ```
 
 ## 📋 部署检查清单
@@ -356,7 +356,7 @@ curl http://localhost:8080/api/monitor/status
 ### 部署后检查
 - [ ] 服务状态正常 (`systemctl status rtk-data-relay`)
 - [ ] 端口监听正常 (`netstat -tlnp`)
-- [ ] Web API响应正常 (`curl http://localhost:8080/api/monitor/status`)
+- [ ] Web API响应正常 (`curl http://localhost:8899/api/v1/system/status`)
 - [ ] 日志无ERROR级别错误
 - [ ] frpc端口映射配置正确
 - [ ] 防火墙规则配置正确

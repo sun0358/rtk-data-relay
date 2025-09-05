@@ -15,8 +15,10 @@ RTK数据转发服务是一个专为RTK差分定位系统设计的高性能TCP�
 - ✅ **高性能数据转发**：基于Netty框架，支持高并发连接，零延迟数据透传
 - ✅ **智能连接管理**：支持1个基站 + 最多10个移动站同时连接
 - ✅ **自动故障恢复**：连接断开自动重连，异常自动恢复，定时健康检查
-- ✅ **实时监控统计**：Web API监控接口，实时查看连接状态和数据传输统计
-- ✅ **心跳保活机制**：25秒间隔心跳包，保持长连接稳定（适配frp环境）
+- ✅ **实时监控统计**：RESTful API监控接口，实时查看连接状态和数据传输统计
+- ✅ **心跳保活机制**：20秒间隔心跳包，保持长连接稳定（适配frp环境）
+- ✅ **数据库存储优化**：基站数据1小时聚合存储，存储效率提升99%以上
+- ✅ **混合转发策略**：少量移动站同步转发，大量移动站异步转发，确保数据可靠性
 - ✅ **系统服务集成**：systemd服务管理，开机自启动，进程守护
 - ✅ **完善日志系统**：详细的运行日志，支持日志轮转和分级记录
 - ✅ **一键部署**：自动化部署脚本，支持快速安装和更新
@@ -75,14 +77,20 @@ cd ~/company/prj/Java/rtk-data-relay
 ### 3. 验证服务运行
 
 ```bash
-# 检查服务状态
-curl http://localhost:8899/api/monitor/status
+# 检查服务健康状态（新RESTful API）
+curl http://localhost:8899/api/v1/health
 
-# 检查健康状态
-curl http://localhost:8899/actuator/health
+# 检查系统状态
+curl http://localhost:8899/api/v1/system/status
 
-# 查看连接信息
-curl http://localhost:8899/api/monitor/connections
+# 查看基站列表
+curl http://localhost:8899/api/v1/base-stations
+
+# 查看移动站列表  
+curl http://localhost:8899/api/v1/mobile-stations
+
+# 查看转发性能统计
+curl http://localhost:8899/api/v1/relay/performance
 ```
 
 ### 4. 生产环境部署
@@ -192,29 +200,49 @@ remote_port = 19002
 
 ## 📊 监控和管理
 
-### Web API接口
+### RESTful API接口
+
+**🚀 新版本RESTful API (推荐使用)**
 
 | 接口路径 | 方法 | 功能说明 | 示例响应 |
 |---------|------|---------|---------|
-| `/api/monitor/status` | GET | 获取服务整体状态 | 服务运行状态、连接数统计 |
-| `/api/monitor/statistics` | GET | 获取详细统计信息 | 数据传输量、消息计数、错误统计 |
-| `/api/monitor/connections` | GET | 获取所有连接信息 | 基站和移动站连接详情 |
-| `/api/monitor/connections/base-stations` | GET | 获取基站连接信息 | 基站连接状态和统计 |
-| `/api/monitor/connections/mobile-stations` | GET | 获取移动站连接信息 | 移动站连接状态和统计 |
-| `/actuator/health` | GET | 系统健康检查 | Spring Boot健康状态 |
-| `/api/monitor/ping` | GET | 服务可用性检测 | 简单的ping响应 |
+| `/api/v1/health` | GET | 服务健康检查 | 服务状态、版本信息 |
+| `/api/v1/system/status` | GET | 系统状态概览 | 连接统计、性能指标、数据库状态 |
+| `/api/v1/system/performance` | GET | 系统性能监控 | 吞吐量、错误率、资源使用 |
+| `/api/v1/base-stations` | GET | 基站列表和状态 | 基站连接信息、数据质量 |
+| `/api/v1/base-stations/{id}` | GET | 指定基站详情 | 单个基站详细统计 |
+| `/api/v1/mobile-stations` | GET | 移动站连接信息 | 移动站连接状态列表 |
+| `/api/v1/relay/performance` | GET | 转发性能统计 | 成功率、吞吐量、效率指标 |
+| `/api/v1/database/status` | GET | 数据库状态信息 | 存储统计、连接状态 |
+| `/api/v1/ping` | GET | 服务可用性检测 | 简单的ping响应 |
+
+**📋 兼容性接口（向后兼容，建议迁移到新API）**
+
+| 接口路径 | 方法 | 功能说明 | 状态 |
+|---------|------|---------|------|
+| `/api/v1/statistics` | GET | 原始统计数据 | 已弃用 |
+| `/actuator/health` | GET | Spring Boot健康检查 | 保留 |
 
 ### 监控访问示例
 
 ```bash
-# 本地访问
-curl http://localhost:8899/api/monitor/status
+# 本地访问（新RESTful API）
+curl http://localhost:8899/api/v1/system/status
 
 # 通过frp公网访问
-curl http://<frp公网IP>:18080/api/monitor/status
+curl http://<frp公网IP>:18080/api/v1/system/status
 
 # 获取JSON格式化输出
-curl -s http://localhost:8899/api/monitor/statistics | jq
+curl -s http://localhost:8899/api/v1/base-stations | jq
+
+# 获取转发性能统计（支持参数）
+curl -s "http://localhost:8899/api/v1/relay/performance?hours=24&includeDetails=true" | jq
+
+# 获取指定基站详情
+curl -s "http://localhost:8899/api/v1/base-stations/BS_192.168.1.100_12345" | jq
+
+# 获取数据库状态（如果启用）
+curl -s "http://localhost:8899/api/v1/database/status?days=7" | jq
 ```
 
 ### 服务管理命令
@@ -249,8 +277,8 @@ htop -p $(pgrep -f rtk-data-relay)       # 更友好的资源监控
 sudo ss -tlnp | grep -E ':(8899|9003|9002)'  # 端口监听状态
 sudo ss -tp | grep java                       # Java进程网络连接
 
-# 服务状态监控脚本
-watch -n 5 "curl -s http://localhost:8899/api/monitor/status | jq"
+# 服务状态监控脚本（新RESTful API）
+watch -n 5 "curl -s http://localhost:8899/api/v1/system/status | jq"
 ```
 
 ## 🔧 故障排除
@@ -303,8 +331,9 @@ nc -zv <服务器IP> 9002  # 测试移动站端口
 sudo ufw status
 sudo iptables -L -n
 
-# 查看连接状态
-curl -s http://localhost:8899/api/monitor/connections | jq
+# 查看连接状态（新RESTful API）
+curl -s http://localhost:8899/api/v1/base-stations | jq
+curl -s http://localhost:8899/api/v1/mobile-stations | jq
 
 # 查看实时日志中的连接信息
 sudo journalctl -u rtk-data-relay -f | grep -E "(连接建立|连接断开|Connection)"
@@ -313,8 +342,9 @@ sudo journalctl -u rtk-data-relay -f | grep -E "(连接建立|连接断开|Conne
 #### 4. 数据转发异常
 
 ```bash
-# 检查统计信息
-curl -s http://localhost:8899/api/monitor/statistics | jq
+# 检查统计信息（新RESTful API）
+curl -s http://localhost:8899/api/v1/system/status | jq
+curl -s http://localhost:8899/api/v1/relay/performance | jq
 
 # 查看转发错误日志
 sudo journalctl -u rtk-data-relay | grep -E "(转发失败|relay.*fail)"
@@ -382,25 +412,39 @@ sudo sysctl -p
 rtk-data-relay/
 ├── src/main/java/com/rtk/relay/
 │   ├── config/                    # 配置类
-│   │   ├── RtkDataBuffer.java     # 数据缓冲配置
+│   │   ├── RtkDataBuffer.java     # 智能数据缓冲配置
 │   │   ├── RtkProperties.java     # 属性配置
 │   │   └── WebSecurityConfig.java # 安全配置
 │   ├── controller/                # Web控制器
-│   │   └── MonitorController.java # 监控接口控制器
+│   │   └── MonitorController.java # RESTful监控接口控制器
+│   ├── dto/                       # 数据传输对象
+│   │   ├── ApiResponse.java       # 统一API响应格式
+│   │   ├── SystemStatusDTO.java   # 系统状态DTO
+│   │   ├── BaseStationDTO.java    # 基站信息DTO
+│   │   └── RelayPerformanceDTO.java # 转发性能DTO
 │   ├── entity/                    # 实体类
 │   │   ├── ConnectionInfo.java    # 连接信息实体
 │   │   ├── ConnectionHistory.java # 连接历史实体
 │   │   ├── RelayStatistics.java   # 转发统计实体
-│   │   └── HourlyStatistics.java  # 小时统计实体
+│   │   ├── HourlyStatistics.java  # 小时统计实体
+│   │   ├── BaseStationRtcmData.java # 基站RTCM数据实体
+│   │   ├── DataRelayLog.java      # 数据转发日志实体
+│   │   └── DataQualityStats.java  # 数据质量统计实体
 │   ├── netty/                     # Netty网络处理器
 │   │   ├── BaseStationHandler.java    # 基站连接处理器
 │   │   └── MobileStationHandler.java  # 移动站连接处理器
 │   ├── service/                   # 业务服务层
 │   │   ├── ConnectionManager.java     # 连接管理服务
-│   │   ├── DataRelayService.java      # 数据转发服务
-│   │   ├── TcpServerService.java      # TCP服务器服务
+│   │   ├── DataRelayService.java      # 混合转发策略数据转发服务
+│   │   ├── TcpServerService.java      # 优化的TCP服务器服务
 │   │   ├── HealthCheckService.java    # 健康检查服务
-│   │   └── DataPersistenceService.java # 数据持久化服务
+│   │   └── DataPersistenceService.java # 智能数据持久化服务
+│   ├── mapper/                    # MyBatis-Plus数据访问层
+│   │   ├── ConnectionHistoryMapper.java    # 连接历史Mapper
+│   │   ├── HourlyStatisticsMapper.java     # 小时统计Mapper
+│   │   ├── BaseStationRtcmDataMapper.java  # 基站RTCM数据Mapper
+│   │   ├── DataRelayLogMapper.java         # 转发日志Mapper
+│   │   └── DataQualityStatsMapper.java     # 数据质量统计Mapper
 │   ├── util/                      # 工具类
 │   │   └── ConnectionIdGenerator.java # 连接ID生成器
 │   ├── exception/                 # 异常处理
@@ -410,12 +454,16 @@ rtk-data-relay/
 │   ├── build-and-deploy.sh        # 自动化部署脚本
 │   ├── install.sh                 # 安装脚本
 │   └── rtk-data-relay.service     # systemd服务配置
-├── db/                           # 数据库相关（可选）
+├── db/                           # 数据库相关
+│   ├── rtk_relay.sql             # 基础数据库结构
+│   └── rtk_relay_enhanced.sql    # 增强数据库结构（1小时聚合优化）
 ├── logs/                         # 日志文件目录
+├── API-DOCUMENTATION.md          # RESTful API详细文档
 └── docs/                         # 项目文档
     ├── README.md                 # 项目说明
     ├── DEPLOYMENT-GUIDE.md       # 部署指南
-    └── USAGE-MANUAL.md           # 使用手册
+    ├── USAGE-MANUAL.md           # 使用手册
+    └── PROJECT-SUMMARY.md        # 项目总结
 ```
 
 ## 🔮 扩展开发
@@ -478,6 +526,7 @@ mvn test
 
 ---
 
-**📝 最后更新**: 2024年9月  
+**📝 最后更新**: 2025年9月  
 **🔄 版本**: v1.0.0  
-**✅ 状态**: 生产就绪
+**✅ 状态**: 生产就绪  
+**🚀 新功能**: RESTful API、数据库优化、混合转发策略

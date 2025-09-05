@@ -10,6 +10,7 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
@@ -40,7 +41,8 @@ public class TcpServerService {
     /**
      * 数据转发服务
      */
-    private final DataRelayService dataRelayService;
+    @Autowired
+    private DataRelayService dataRelayService;
 
     /**
      * Server1的Boss事件循环组
@@ -77,14 +79,11 @@ public class TcpServerService {
      * 
      * @param rtkProperties RTK配置
      * @param connectionManager 连接管理器
-     * @param dataRelayService 数据转发服务
      */
     public TcpServerService(RtkProperties rtkProperties, 
-                           ConnectionManager connectionManager,
-                           DataRelayService dataRelayService) {
+                           ConnectionManager connectionManager) {
         this.rtkProperties = rtkProperties;
         this.connectionManager = connectionManager;
-        this.dataRelayService = dataRelayService;
     }
     
     /**
@@ -124,9 +123,18 @@ public class TcpServerService {
             ServerBootstrap bootstrap = new ServerBootstrap();
             bootstrap.group(server1BossGroup, server1WorkerGroup)
                     .channel(NioServerSocketChannel.class)
-                    .option(ChannelOption.SO_BACKLOG, 128)
-                    .childOption(ChannelOption.SO_KEEPALIVE, true)
-                    .childOption(ChannelOption.TCP_NODELAY, true)
+                    // 服务器端配置
+                    .option(ChannelOption.SO_BACKLOG, 1024) // 增加连接队列大小
+                    .option(ChannelOption.SO_REUSEADDR, true) // 允许端口重用
+                    .option(ChannelOption.SO_RCVBUF, 32 * 1024) // 接收缓冲区32KB
+                    // 客户端连接配置
+                    .childOption(ChannelOption.SO_KEEPALIVE, true) // 启用TCP keepalive
+                    .childOption(ChannelOption.TCP_NODELAY, true) // 禁用Nagle算法，低延迟
+                    .childOption(ChannelOption.SO_SNDBUF, 32 * 1024) // 发送缓冲区32KB
+                    .childOption(ChannelOption.SO_RCVBUF, 32 * 1024) // 接收缓冲区32KB
+                    .childOption(ChannelOption.WRITE_BUFFER_WATER_MARK, 
+                            new WriteBufferWaterMark(8 * 1024, 32 * 1024)) // 写缓冲区水位线
+                    .childOption(ChannelOption.SO_LINGER, 0) // 立即关闭，不等待数据发送完成
                     .childHandler(new ChannelInitializer<SocketChannel>() {
                         @Override
                         protected void initChannel(SocketChannel ch) {
@@ -166,9 +174,19 @@ public class TcpServerService {
             ServerBootstrap bootstrap = new ServerBootstrap();
             bootstrap.group(server2BossGroup, server2WorkerGroup)
                     .channel(NioServerSocketChannel.class)
-                    .option(ChannelOption.SO_BACKLOG, 128)
-                    .childOption(ChannelOption.SO_KEEPALIVE, true)
-                    .childOption(ChannelOption.TCP_NODELAY, true)
+                    // 服务器端配置
+                    .option(ChannelOption.SO_BACKLOG, 1024) // 增加连接队列大小
+                    .option(ChannelOption.SO_REUSEADDR, true) // 允许端口重用
+                    .option(ChannelOption.SO_RCVBUF, 32 * 1024) // 接收缓冲区32KB
+                    // 客户端连接配置（移动站专用优化）
+                    .childOption(ChannelOption.SO_KEEPALIVE, true) // 启用TCP keepalive
+                    .childOption(ChannelOption.TCP_NODELAY, true) // 禁用Nagle算法，低延迟
+                    .childOption(ChannelOption.SO_SNDBUF, 64 * 1024) // 发送缓冲区64KB（移动站主要接收数据）
+                    .childOption(ChannelOption.SO_RCVBUF, 16 * 1024) // 接收缓冲区16KB
+                    .childOption(ChannelOption.WRITE_BUFFER_WATER_MARK, 
+                            new WriteBufferWaterMark(16 * 1024, 64 * 1024)) // 写缓冲区水位线
+                    .childOption(ChannelOption.SO_LINGER, 0) // 立即关闭，不等待数据发送完成
+                    .childOption(ChannelOption.ALLOW_HALF_CLOSURE, false) // 不允许半关闭状态
                     .childHandler(new ChannelInitializer<SocketChannel>() {
                         @Override
                         protected void initChannel(SocketChannel ch) {
@@ -181,7 +199,7 @@ public class TcpServerService {
                             // pipeline.addLast(new ChannelInboundHandlerAdapter() {...}); // 已移除
 
                             // 添加移动站数据处理器
-                            pipeline.addLast(new MobileStationHandler(connectionManager));
+                            pipeline.addLast(new MobileStationHandler(connectionManager, dataRelayService));
                         }
                     });
             

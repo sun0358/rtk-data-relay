@@ -30,7 +30,7 @@ cd ~/company/prj/Java/rtk-data-relay
 mvn clean package -DskipTests
 
 # 验证构建结果
-ls -la target/rtk-data-relay-1.0.0.jar
+ls -la target/rtk-data-relay-1.0.0-*.jar
 ```
 
 ### 步骤2：配置部署参数
@@ -71,7 +71,7 @@ UBUNTU_SSH_KEY=""              # SSH私钥路径（可选）
 
 ```bash
 # 上传jar文件
-scp target/rtk-data-relay-1.0.0.jar ubuntu@192.168.1.100:~/
+scp target/rtk-data-relay-1.0.0-*.jar ubuntu@192.168.1.100:~/
 
 # 上传部署文件
 scp deploy/rtk-data-relay.service ubuntu@192.168.1.100:~/
@@ -247,7 +247,7 @@ sudo journalctl -u rtk-data-relay --since "5 minutes ago"
 
 # 手动启动测试
 cd /opt/rtk-data-relay
-sudo -u rtk java -jar rtk-data-relay-1.0.0.jar
+sudo -u rtk java -jar rtk-data-relay-1.0.0-*.jar
 ```
 
 ### 2. 连接问题
@@ -290,7 +290,7 @@ ExecStart=/usr/bin/java -jar \
   -XX:MaxGCPauseMillis=100 \
   -XX:+HeapDumpOnOutOfMemoryError \
   -XX:HeapDumpPath=/opt/rtk-data-relay/logs/ \
-  rtk-data-relay-1.0.0.jar
+  rtk-data-relay-1.0.0-*.jar
 ```
 
 ### 2. 系统参数调优
@@ -340,12 +340,12 @@ mvn clean package -DskipTests
 sudo systemctl stop rtk-data-relay
 
 # 3. 备份当前版本
-sudo cp /opt/rtk-data-relay/rtk-data-relay-1.0.0.jar /opt/rtk-data-relay/rtk-data-relay-1.0.0.jar.bak
+sudo cp /opt/rtk-data-relay/rtk-data-relay-1.0.0-*.jar /opt/rtk-data-relay/rtk-data-relay-backup-$(date +%Y%m%d_%H%M%S).jar
 
 # 4. 上传新版本
-scp target/rtk-data-relay-1.0.0.jar ubuntu@<服务器IP>:/tmp/
-sudo cp /tmp/rtk-data-relay-1.0.0.jar /opt/rtk-data-relay/
-sudo chown rtk:rtk /opt/rtk-data-relay/rtk-data-relay-1.0.0.jar
+scp target/rtk-data-relay-1.0.0-*.jar ubuntu@<服务器IP>:/tmp/
+sudo cp /tmp/rtk-data-relay-1.0.0-*.jar /opt/rtk-data-relay/
+sudo chown rtk:rtk /opt/rtk-data-relay/rtk-data-relay-1.0.0-*.jar
 
 # 5. 启动服务
 sudo systemctl start rtk-data-relay

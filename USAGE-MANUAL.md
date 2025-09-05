@@ -18,16 +18,20 @@ sudo journalctl -u rtk-data-relay --since "5 minutes ago"
 ### 2. 验证服务正常运行
 
 ```bash
-# 检查端口监听
-sudo netstat -tlnp | grep -E ':(8080|9001|9002)'
+# 检查端口监听（实际端口配置）
+sudo netstat -tlnp | grep -E ':(8899|9003|9002)'
 # 应该看到三个端口都在监听状态
 
-# 测试Web API
-curl http://localhost:8080/api/monitor/status
-# 应该返回JSON格式的状态信息
+# 测试新RESTful API健康检查
+curl http://localhost:8899/api/v1/health
+# 应该返回JSON格式的健康状态信息
 
-# 测试健康检查
-curl http://localhost:8080/actuator/health
+# 测试系统状态API
+curl http://localhost:8899/api/v1/system/status
+# 应该返回详细的系统状态信息
+
+# 测试Spring Boot健康检查（兼容）
+curl http://localhost:8899/actuator/health
 # 应该返回 {"status":"UP"}
 ```
 
@@ -38,7 +42,7 @@ curl http://localhost:8080/actuator/health
 1. **网络设置**
    - 连接类型: TCP客户端
    - 服务器IP: frp服务器公网IP
-   - 服务器端口: 19001 (映射到内网9001)
+   - 服务器端口: 19001 (映射到内网9003)
    - 自动重连: 启用
    - 重连间隔: 5秒
 
@@ -49,8 +53,11 @@ curl http://localhost:8080/actuator/health
 
 3. **连接验证**
    ```bash
-   # 查看基站连接状态
-   curl http://localhost:8080/api/monitor/connections/base-stations
+   # 查看基站连接状态（新RESTful API）
+   curl http://localhost:8899/api/v1/base-stations | jq
+   
+   # 查看指定基站详情
+   curl http://localhost:8899/api/v1/base-stations/{基站ID} | jq
    ```
 
 ### 移动站连接配置
@@ -64,23 +71,42 @@ curl http://localhost:8080/actuator/health
 
 2. **连接验证**
    ```bash
-   # 查看移动站连接状态
-   curl http://localhost:8080/api/monitor/connections/mobile-stations
+   # 查看移动站连接状态（新RESTful API）
+   curl http://localhost:8899/api/v1/mobile-stations | jq
    ```
 
 ## 📊 监控和管理
 
-### 1. 实时状态监控
+### 1. 实时状态监控（新RESTful API）
 
 ```bash
-# 查看服务整体状态
-curl http://localhost:8080/api/monitor/status | jq
+# 查看服务健康状态
+curl http://localhost:8899/api/v1/health | jq
 
-# 查看所有连接信息
-curl http://localhost:8080/api/monitor/connections | jq
+# 查看系统状态概览
+curl http://localhost:8899/api/v1/system/status | jq
 
-# 查看详细统计信息
-curl http://localhost:8080/api/monitor/statistics | jq
+# 查看系统性能监控
+curl http://localhost:8899/api/v1/system/performance | jq
+
+# 查看基站连接信息
+curl http://localhost:8899/api/v1/base-stations | jq
+
+# 查看移动站连接信息
+curl http://localhost:8899/api/v1/mobile-stations | jq
+
+# 查看转发性能统计
+curl "http://localhost:8899/api/v1/relay/performance?hours=24" | jq
+
+# 查看数据库状态（如果启用）
+curl "http://localhost:8899/api/v1/database/status?days=7" | jq
+```
+
+### 1.1 兼容性API（向后兼容）
+
+```bash
+# 原始统计数据（已弃用，建议使用新API）
+curl http://localhost:8899/api/v1/statistics | jq
 ```
 
 ### 2. 日志监控
@@ -105,12 +131,12 @@ sudo journalctl -u rtk-data-relay | grep -E "(连接建立|连接断开)"
 # 查看进程资源使用
 top -p $(pgrep -f rtk-data-relay)
 
-# 查看网络连接数
-sudo ss -tln | grep -E ':(9001|9002)' | wc -l
+# 查看网络连接数（实际端口）
+sudo ss -tln | grep -E ':(9003|9002)' | wc -l
 
-# 查看数据传输统计
-curl -s http://localhost:8080/api/monitor/statistics | \
-jq '{receivedMB: (.totalReceivedBytes/1024/1024), sentMB: (.totalSentBytes/1024/1024)}'
+# 查看数据传输统计（新RESTful API）
+curl -s http://localhost:8899/api/v1/system/status | \
+jq '{receivedMB: (.totalReceivedBytes/1024/1024), sentMB: (.totalSentBytes/1024/1024), currentBaseStations: .currentBaseStationConnections, currentMobileStations: .currentMobileStationConnections}'
 ```
 
 ## 🔧 日常维护操作
@@ -132,9 +158,12 @@ else
     sudo systemctl restart rtk-data-relay
 fi
 
-# 检查连接数
-CONNECTIONS=$(curl -s http://localhost:8080/api/monitor/status | jq -r '.activeMobileStations')
-echo "📱 当前移动站连接数: $CONNECTIONS"
+# 检查连接数（新RESTful API）
+STATUS=$(curl -s http://localhost:8899/api/v1/system/status)
+BASE_STATIONS=$(echo $STATUS | jq -r '.data.currentBaseStationConnections')
+MOBILE_STATIONS=$(echo $STATUS | jq -r '.data.currentMobileStationConnections')
+echo "🏗️ 当前基站连接数: $BASE_STATIONS"
+echo "📱 当前移动站连接数: $MOBILE_STATIONS"
 
 # 检查错误日志
 ERROR_COUNT=$(sudo journalctl -u rtk-data-relay --since "24 hours ago" | grep -c ERROR || true)
