@@ -5,6 +5,7 @@ import com.rtk.relay.entity.ConnectionInfo;
 import com.rtk.relay.entity.RelayStatistics;
 import io.netty.channel.Channel;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -49,6 +50,12 @@ public class ConnectionManager {
      * RTK配置
      */
     private final RtkProperties rtkProperties;
+    
+    /**
+     * 数据持久化服务
+     */
+    @Autowired
+    private DataPersistenceService dataPersistenceService;
 
     /**
      * 定时任务执行器（用于连接检查和清理）
@@ -80,6 +87,18 @@ public class ConnectionManager {
         statistics.getTotalBaseStationConnections().incrementAndGet();
         statistics.updateLastActiveTime();
 
+        // 记录连接建立到数据库
+        try {
+            dataPersistenceService.recordConnectionEstablished(
+                connectionId, 
+                "BASE_STATION", 
+                connectionInfo.getRemoteAddress(),
+                connectionInfo.getRemotePort()
+            );
+        } catch (Exception e) {
+            log.warn("记录基站连接建立失败: {}", e.getMessage());
+        }
+
         log.info("基站连接已注册 - 连接ID: {}, 当前基站连接数: {}",
                 connectionId, statistics.getCurrentBaseStationConnections().get());
     }
@@ -98,6 +117,18 @@ public class ConnectionManager {
         statistics.getTotalMobileStationConnections().incrementAndGet();
         statistics.updateLastActiveTime();
 
+        // 记录连接建立到数据库
+        try {
+            dataPersistenceService.recordConnectionEstablished(
+                connectionId, 
+                "MOBILE_STATION", 
+                connectionInfo.getRemoteAddress(),
+                connectionInfo.getRemotePort()
+            );
+        } catch (Exception e) {
+            log.warn("记录移动站连接建立失败: {}", e.getMessage());
+        }
+
         log.info("移动站连接已注册 - 连接ID: {}, 当前移动站连接数: {}",
                 connectionId, statistics.getCurrentMobileStationConnections().get());
     }
@@ -108,10 +139,26 @@ public class ConnectionManager {
      * @param connectionId 连接ID
      */
     public void unregisterBaseStation(String connectionId) {
+        ConnectionInfo connectionInfo = connectionInfoMap.get(connectionId);
+        
         baseStationChannels.remove(connectionId);
         connectionInfoMap.remove(connectionId);
         statistics.getCurrentBaseStationConnections().decrementAndGet();
         statistics.updateLastActiveTime();
+
+        // 记录连接断开到数据库
+        if (connectionInfo != null) {
+            try {
+                dataPersistenceService.recordConnectionClosed(
+                    connectionId, 
+                    connectionInfo.getReceivedBytes(),
+                    connectionInfo.getSentBytes(),
+                    "DISCONNECTED"
+                );
+            } catch (Exception e) {
+                log.warn("记录基站连接断开失败: {}", e.getMessage());
+            }
+        }
 
         log.info("基站连接已注销 - 连接ID: {}, 当前基站连接数: {}",
                 connectionId, statistics.getCurrentBaseStationConnections().get());
@@ -123,10 +170,26 @@ public class ConnectionManager {
      * @param connectionId 连接ID
      */
     public void unregisterMobileStation(String connectionId) {
+        ConnectionInfo connectionInfo = connectionInfoMap.get(connectionId);
+        
         mobileStationChannels.remove(connectionId);
         connectionInfoMap.remove(connectionId);
         statistics.getCurrentMobileStationConnections().decrementAndGet();
         statistics.updateLastActiveTime();
+
+        // 记录连接断开到数据库
+        if (connectionInfo != null) {
+            try {
+                dataPersistenceService.recordConnectionClosed(
+                    connectionId,
+                    connectionInfo.getReceivedBytes(),
+                    connectionInfo.getSentBytes(),
+                    "DISCONNECTED"
+                );
+            } catch (Exception e) {
+                log.warn("记录移动站连接断开失败: {}", e.getMessage());
+            }
+        }
 
         log.info("移动站连接已注销 - 连接ID: {}, 当前移动站连接数: {}",
                 connectionId, statistics.getCurrentMobileStationConnections().get());

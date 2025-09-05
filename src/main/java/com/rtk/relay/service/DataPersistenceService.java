@@ -5,6 +5,7 @@ import com.rtk.relay.mapper.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,22 +22,22 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @Slf4j
-@ConditionalOnBean(DataSource.class)  // 只在数据源存在时启用
+ @ConditionalOnProperty(prefix = "spring.datasource", name = "url")  // 只在配置了数据库URL时启用
 public class DataPersistenceService {
 
-    @Autowired(required = false)
+    @Autowired
     private HourlyStatisticsMapper statisticsMapper;
 
-    @Autowired(required = false)
+    @Autowired
     private ConnectionHistoryMapper historyMapper;
     
-    @Autowired(required = false)
+    @Autowired
     private BaseStationRtcmDataMapper baseStationRtcmDataMapper;
     
-    @Autowired(required = false)
+    @Autowired
     private DataRelayLogMapper dataRelayLogMapper;
     
-    @Autowired(required = false)
+    @Autowired
     private DataQualityStatsMapper dataQualityStatsMapper;
     
     /**

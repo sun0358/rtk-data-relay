@@ -36,7 +36,7 @@ public class MonitorController {
     @Autowired
     private DataRelayService dataRelayService;
     
-    @Autowired(required = false)
+    @Autowired
     private DataPersistenceService dataPersistenceService;
 
     // ==================== 系统状态相关接口 ====================

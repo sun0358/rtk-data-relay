@@ -70,7 +70,7 @@ public class DataRelayService {
     /**
      * 数据持久化服务（可选依赖）
      */
-    @Autowired(required = false)
+    @Autowired
     private DataPersistenceService dataPersistenceService;
 
     /**
@@ -235,7 +235,7 @@ public class DataRelayService {
         }
         
         // 存储基站RTCM差分数据（优化存储策略）
-        if (dataPersistenceService != null && dataPersistenceService.isDatabaseEnabled()) {
+        if (dataPersistenceService.isDatabaseEnabled()) {
             try {
                 // 获取基站IP地址（从连接管理器获取）
                 String remoteAddress = getBaseStationAddress(sourceConnectionId);
@@ -540,19 +540,17 @@ public class DataRelayService {
     public Map<String, Object> getDatabaseStatus() {
         Map<String, Object> status = new HashMap<>();
         
-        if (dataPersistenceService != null) {
-            status.put("enabled", dataPersistenceService.isDatabaseEnabled());
-            
-            if (dataPersistenceService.isDatabaseEnabled()) {
-                // 获取存储效率统计
-                status.put("storageEfficiency", dataPersistenceService.getStorageEfficiencyStats(7));
-                status.put("dataQuality", dataPersistenceService.getDataQualitySummary(7));
-                status.put("relayPerformance", dataPersistenceService.getRelayPerformanceStats(24));
-                status.put("baseStationStatus", dataPersistenceService.getCurrentBaseStationStatus());
-            }
+        status.put("enabled", dataPersistenceService.isDatabaseEnabled());
+        
+        if (dataPersistenceService.isDatabaseEnabled()) {
+            // 获取存储效率统计
+            status.put("storageEfficiency", dataPersistenceService.getStorageEfficiencyStats(7));
+            status.put("dataQuality", dataPersistenceService.getDataQualitySummary(7));
+            status.put("relayPerformance", dataPersistenceService.getRelayPerformanceStats(24));
+            status.put("baseStationStatus", dataPersistenceService.getCurrentBaseStationStatus());
         } else {
             status.put("enabled", false);
-            status.put("reason", "DataPersistenceService not available");
+            status.put("reason", "Database connection not available");
         }
         
         return status;
